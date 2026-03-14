@@ -1,3 +1,5 @@
+import { deriveInitialSelectedTrackIndexes } from './trackSelection.mjs';
+
 const vscode = globalThis.acquireVsCodeApi();
 const alphaTab = globalThis.alphaTab;
 const config = globalThis.__TABST_CONFIG__;
@@ -23,6 +25,7 @@ const trackListElement = document.getElementById('track-list');
 
 let selectedTrackIndexes = [];
 let currentFileName = '';
+let currentScoreTracks = [];
 
 const mainGlyphColor = alphaTab.model.Color.fromJson(getComputedStyle(document.body).getPropertyValue('--vscode-foreground').trim());
 const fallbackGlyphColor = mainGlyphColor ?? new alphaTab.model.Color(235, 235, 235, 1);
@@ -82,7 +85,8 @@ window.addEventListener('pagehide', () => {
 });
 
 api.scoreLoaded.on(score => {
-	selectedTrackIndexes = score.tracks.map((_, index) => index);
+	currentScoreTracks = score.tracks;
+	selectedTrackIndexes = deriveInitialSelectedTrackIndexes(score.tracks, api.tracks ?? []);
 	currentFileElement.textContent = currentFileName || 'Current score';
 	titleElement.textContent = score.title?.trim() || currentFileName || 'Untitled score';
 	const artist = score.artist?.trim();
@@ -95,6 +99,7 @@ api.scoreLoaded.on(score => {
 });
 
 api.renderFinished.on(() => {
+	syncTrackSelectionUi();
 	setBusy(false);
 	setPlayerStatus('Rendered');
 });
@@ -177,7 +182,7 @@ function renderTrackList(tracks) {
 
 		const checkbox = document.createElement('input');
 		checkbox.type = 'checkbox';
-		checkbox.checked = true;
+		checkbox.checked = selectedTrackIndexes.includes(index);
 		checkbox.addEventListener('change', () => {
 			selectedTrackIndexes = tracks
 				.map((_, trackIndex) => trackIndex)
@@ -209,6 +214,21 @@ function renderTrackList(tracks) {
 		content.append(trackName, trackKind);
 		label.append(checkbox, content);
 		trackListElement.appendChild(label);
+	}
+}
+
+function syncTrackSelectionUi() {
+	if (!currentScoreTracks || currentScoreTracks.length === 0) {
+		return;
+	}
+
+	selectedTrackIndexes = deriveInitialSelectedTrackIndexes(currentScoreTracks, api.tracks ?? []);
+
+	for (const [trackIndex] of currentScoreTracks.entries()) {
+		const input = trackListElement.querySelector(`input[data-track-index="${trackIndex}"]`);
+		if (input instanceof HTMLInputElement) {
+			input.checked = selectedTrackIndexes.includes(trackIndex);
+		}
 	}
 }
 
