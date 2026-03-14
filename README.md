@@ -1,71 +1,42 @@
-# vscode-tabst README
+# vscode-tabst
 
-This is the README for your extension "vscode-tabst". After writing up a brief description, we recommend including the following sections.
+Open Guitar Pro and MusicXML scores directly inside VS Code with alphaTab rendering and playback.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Open `*.gp`, `*.gp3`, `*.gp4`, `*.gp5`, `*.gpx`, `*.gp7`, `*.gp8`, `*.musicxml`, and `*.mxl`
+- Render notation and tablature in a custom VS Code editor
+- Play, pause, and stop score playback with the built-in alphaTab player
+- Toggle visible tracks from the sidebar
+- Reload the score from disk without reopening the editor
 
-For example if there is an image subfolder under your extension project workspace:
+## Usage
 
-\!\[feature X\]\(images/feature-x.png\)
+### Supported files
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+These file types open automatically in Tabst Score Viewer:
 
-## Requirements
+- Guitar Pro: `.gp`, `.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp7`, `.gp8`
+- MusicXML: `.musicxml`, `.mxl`
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+### Open other MusicXML-like files
 
-## Extension Settings
+If you have a generic `.xml` file that contains MusicXML, run:
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+- `Open in Tabst Score Viewer`
 
-For example:
+from the Command Palette, editor title, or Explorer context menu.
 
-This extension contributes the following settings:
+## Notes
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+- Rendering and playback are powered by [`@coderline/alphatab`](https://www.alphatab.net/)
+- MusicXML support depends on alphaTab's importer compatibility
+- Large scores may take a moment to parse before playback becomes ready
 
-## Known Issues
+## Development
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+```bash
+npm install
+npm run compile
+npm test
+```

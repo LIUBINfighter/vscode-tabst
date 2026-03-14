@@ -1,26 +1,267 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+const SCORE_VIEW_TYPE = 'vscode-tabst.scoreViewer';
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "vscode-tabst" is now active!');
+type ExtensionToWebviewMessage =
+	| {
+		command: 'loadScore';
+		fileName: string;
+		fileUri: string;
+		fileData: string;
+	}
+	| {
+		command: 'setBusy';
+		busy: boolean;
+		message?: string;
+	};
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('vscode-tabst.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from vscode-tabst!');
-	});
+type WebviewToExtensionMessage =
+	| {
+		command: 'ready';
+	}
+	| {
+		command: 'reloadFromDisk';
+	};
 
-	context.subscriptions.push(disposable);
+export function activate(context: vscode.ExtensionContext): void {
+	context.subscriptions.push(ScoreViewerProvider.register(context));
+	context.subscriptions.push(
+		vscode.commands.registerCommand('vscode-tabst.openInScoreViewer', async (resource?: vscode.Uri) => {
+			const targetUri = resource ?? getActiveTabUri();
+
+			if (!targetUri) {
+				await vscode.window.showWarningMessage('Open a Guitar Pro or MusicXML file first.');
+				return;
+			}
+
+			await vscode.commands.executeCommand('vscode.openWith', targetUri, SCORE_VIEW_TYPE);
+		})
+	);
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+function getActiveTabUri(): vscode.Uri | undefined {
+	const activeEditorUri = vscode.window.activeTextEditor?.document.uri;
+	if (activeEditorUri) {
+		return activeEditorUri;
+	}
+
+	const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+	if (!activeTab) {
+		return undefined;
+	}
+
+	return activeTab.input instanceof vscode.TabInputText ? activeTab.input.uri : undefined;
+}
+
+export function deactivate(): void {}
+
+class ScoreDocument implements vscode.CustomDocument {
+	private constructor(
+		public readonly uri: vscode.Uri,
+		private _data: Uint8Array
+	) {}
+
+	public static async create(uri: vscode.Uri): Promise<ScoreDocument> {
+		const data = await vscode.workspace.fs.readFile(uri);
+		return new ScoreDocument(uri, data);
+	}
+
+	public get base64Data(): string {
+		return Buffer.from(this._data).toString('base64');
+	}
+
+	public async reload(): Promise<void> {
+		this._data = await vscode.workspace.fs.readFile(this.uri);
+	}
+
+	public dispose(): void {}
+}
+
+class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDocument> {
+	public static register(context: vscode.ExtensionContext): vscode.Disposable {
+		const provider = new ScoreViewerProvider(context);
+		return vscode.window.registerCustomEditorProvider(SCORE_VIEW_TYPE, provider, {
+			webviewOptions: {
+				retainContextWhenHidden: true
+			},
+			supportsMultipleEditorsPerDocument: true
+		});
+	}
+
+	private constructor(private readonly context: vscode.ExtensionContext) {}
+
+	public async openCustomDocument(
+		uri: vscode.Uri,
+		_openContext: vscode.CustomDocumentOpenContext,
+		_token: vscode.CancellationToken
+	): Promise<ScoreDocument> {
+		return ScoreDocument.create(uri);
+	}
+
+	public async resolveCustomEditor(
+		document: ScoreDocument,
+		webviewPanel: vscode.WebviewPanel,
+		_token: vscode.CancellationToken
+	): Promise<void> {
+		webviewPanel.webview.options = {
+			enableScripts: true,
+			localResourceRoots: [
+				vscode.Uri.joinPath(this.context.extensionUri, 'media'),
+				vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', '@coderline', 'alphatab')
+			]
+		};
+
+		webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
+
+		const postCurrentScore = async () => {
+			await webviewPanel.webview.postMessage({
+				command: 'setBusy',
+				busy: true,
+				message: 'Loading score…'
+			} satisfies ExtensionToWebviewMessage);
+
+			await webviewPanel.webview.postMessage({
+				command: 'loadScore',
+				fileName: path.basename(document.uri.fsPath),
+				fileUri: document.uri.toString(),
+				fileData: document.base64Data
+			} satisfies ExtensionToWebviewMessage);
+		};
+
+		const messageSubscription = webviewPanel.webview.onDidReceiveMessage(
+			async (message: WebviewToExtensionMessage) => {
+				switch (message.command) {
+					case 'ready':
+						await postCurrentScore();
+						break;
+					case 'reloadFromDisk':
+						await document.reload();
+						await postCurrentScore();
+						break;
+				}
+			},
+			undefined,
+			this.context.subscriptions
+		);
+
+		webviewPanel.onDidDispose(() => {
+			messageSubscription.dispose();
+		});
+	}
+
+	private getHtml(webview: vscode.Webview): string {
+		const nonce = getNonce();
+		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'scoreEditor.css'));
+		const appUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'scoreEditor.js'));
+		const alphaTabUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', '@coderline', 'alphatab', 'dist', 'alphaTab.min.js')
+		);
+		const soundFontUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(
+				this.context.extensionUri,
+				'node_modules',
+				'@coderline',
+				'alphatab',
+				'dist',
+				'soundfont',
+				'sonivox.sf2'
+			)
+		);
+		const bravuraWoff2Uri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', '@coderline', 'alphatab', 'dist', 'font', 'Bravura.woff2')
+		);
+		const bravuraWoffUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', '@coderline', 'alphatab', 'dist', 'font', 'Bravura.woff')
+		);
+
+		const config = JSON.stringify({
+			soundFontUri: soundFontUri.toString(),
+			bravuraWoff2Uri: bravuraWoff2Uri.toString(),
+			bravuraWoffUri: bravuraWoffUri.toString(),
+			alphaTabScriptUri: alphaTabUri.toString()
+		});
+
+		return `<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'none'; img-src ${webview.cspSource} blob: data:; script-src 'nonce-${nonce}' ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource} data:; worker-src ${webview.cspSource} blob:; connect-src ${webview.cspSource}; media-src ${webview.cspSource} blob:;"
+		/>
+		<link rel="stylesheet" href="${styleUri}" />
+		<title>Tabst Score Viewer</title>
+	</head>
+	<body>
+		<div class="app-shell">
+			<header class="topbar">
+				<div>
+					<p class="eyebrow">Tabst</p>
+					<h1 id="score-title">Open a score file</h1>
+					<p id="score-subtitle" class="subtitle">Guitar Pro and MusicXML preview with playback</p>
+				</div>
+				<div class="toolbar">
+					<button id="reload-button" type="button" class="secondary">Reload</button>
+					<button id="play-pause-button" type="button">Play</button>
+					<button id="stop-button" type="button" class="secondary">Stop</button>
+				</div>
+			</header>
+
+			<section class="meta-card">
+				<div class="meta-row">
+					<span class="label">Status</span>
+					<span id="player-status">Idle</span>
+				</div>
+				<div class="meta-row">
+					<span class="label">Current file</span>
+					<span id="current-file">—</span>
+				</div>
+				<div class="meta-row">
+					<span class="label">Artist / Album</span>
+					<span id="score-meta">—</span>
+				</div>
+			</section>
+
+			<section class="workspace">
+				<aside class="sidebar">
+					<div class="sidebar-card">
+						<h2>Tracks</h2>
+						<p class="hint">Choose the tracks you want to render.</p>
+						<div id="track-list" class="track-list"></div>
+					</div>
+					<div class="sidebar-card status-card" id="busy-indicator" hidden>
+						<h2>Working</h2>
+						<p id="busy-message">Loading score…</p>
+					</div>
+					<div class="sidebar-card error-card" id="error-panel" hidden>
+						<h2>Could not render this score</h2>
+						<pre id="error-message"></pre>
+					</div>
+				</aside>
+
+				<main class="score-host-wrapper">
+					<div id="alphaTab" class="score-host"></div>
+				</main>
+			</section>
+		</div>
+
+		<script nonce="${nonce}">
+			window.__TABST_CONFIG__ = ${config};
+		</script>
+		<script nonce="${nonce}" src="${alphaTabUri}"></script>
+		<script type="module" nonce="${nonce}" src="${appUri}"></script>
+	</body>
+</html>`;
+	}
+}
+
+function getNonce(): string {
+	const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	let nonce = '';
+	for (let index = 0; index < 32; index += 1) {
+		nonce += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+	}
+	return nonce;
+}

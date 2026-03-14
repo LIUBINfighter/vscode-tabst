@@ -1,7 +1,7 @@
 {
   "name": "vscode-tabst",
   "displayName": "vscode-tabst",
-  "description": "Tabst extension for VS Code",
+  "description": "Open and play Guitar Pro and MusicXML files in VS Code",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.110.0"
@@ -9,15 +9,72 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCustomEditor:vscode-tabst.scoreViewer"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "vscode-tabst.helloWorld",
-        "title": "Hello World"
+        "command": "vscode-tabst.openInScoreViewer",
+        "title": "Open in Tabst Score Viewer"
       }
-    ]
+    ],
+    "customEditors": [
+      {
+        "viewType": "vscode-tabst.scoreViewer",
+        "displayName": "Tabst Score Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.gp"
+          },
+          {
+            "filenamePattern": "*.gp3"
+          },
+          {
+            "filenamePattern": "*.gp4"
+          },
+          {
+            "filenamePattern": "*.gp5"
+          },
+          {
+            "filenamePattern": "*.gpx"
+          },
+          {
+            "filenamePattern": "*.gp7"
+          },
+          {
+            "filenamePattern": "*.gp8"
+          },
+          {
+            "filenamePattern": "*.musicxml"
+          },
+          {
+            "filenamePattern": "*.mxl"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "vscode-tabst.openInScoreViewer"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "vscode-tabst.openInScoreViewer",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "vscode-tabst.openInScoreViewer",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -28,13 +85,16 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.110.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.56.1",
+    "@types/vscode": "^1.110.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.3",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.56.1"
+  },
+  "dependencies": {
+    "@coderline/alphatab": "^1.8.1"
   }
 }
