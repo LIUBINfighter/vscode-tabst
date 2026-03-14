@@ -13,6 +13,7 @@ body {
 	margin: 0;
 	background: var(--vscode-editor-background);
 	color: var(--vscode-editor-foreground);
+	overflow: hidden;
 }
 
 button,
@@ -43,11 +44,11 @@ button.secondary {
 }
 
 .app-shell {
-	min-height: 100vh;
+	height: 100vh;
 	display: grid;
 	grid-template-rows: auto 1fr;
 	gap: 1rem;
-	padding: 1rem;
+	padding: 1rem 1rem 5.5rem;
 }
 
 .topbar,
@@ -60,12 +61,10 @@ button.secondary {
 }
 
 .topbar {
-	display: flex;
-	justify-content: space-between;
-	gap: 1rem;
-	padding: 1rem 1.25rem;
-	align-items: center;
-	flex-wrap: wrap;
+	padding: 0.35rem 0.15rem 0;
+	border: none;
+	background: transparent;
+	box-shadow: none;
 }
 
 .hero-copy {
@@ -92,13 +91,6 @@ button.secondary {
 .hint {
 	margin: 0.35rem 0 0;
 	color: var(--vscode-descriptionForeground);
-}
-
-.toolbar {
-	display: flex;
-	gap: 0.75rem;
-	align-items: center;
-	flex-wrap: wrap;
 }
 
 .compact-button {
@@ -136,12 +128,19 @@ button.secondary {
 	grid-template-columns: minmax(320px, 380px) 1fr;
 	gap: 1rem;
 	min-height: 0;
+	overflow: hidden;
+}
+
+.workspace[data-sidebar-open='false'] {
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .sidebar {
 	display: flex;
 	flex-direction: column;
 	gap: 1rem;
+	overflow: auto;
+	min-height: 0;
 }
 
 .sidebar-card {
@@ -201,6 +200,7 @@ button.secondary {
 	display: flex;
 	align-items: center;
 	gap: 0.65rem;
+	width: 100%;
 	cursor: pointer;
 }
 
@@ -221,6 +221,14 @@ button.secondary {
 	background: color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent);
 }
 
+.track-expander {
+	width: 1rem;
+	flex: 0 0 1rem;
+	text-align: center;
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.9rem;
+}
+
 .track-identity {
 	flex: 1;
 	min-width: 0;
@@ -238,6 +246,7 @@ button.secondary {
 	display: flex;
 	align-items: center;
 	gap: 0.35rem;
+	flex-wrap: wrap;
 }
 
 .track-name {
@@ -381,16 +390,53 @@ button.secondary {
 
 .score-host-wrapper {
 	padding: 0.75rem;
-	overflow: auto;
+	overflow: hidden;
 	min-height: 0;
+	display: flex;
+	justify-content: center;
+	align-items: stretch;
 }
 
 .score-host {
-	min-height: calc(100vh - 17rem);
+	width: min(100%, 1120px);
+	height: 100%;
+	min-height: 0;
 	padding: 1rem;
 	border-radius: 10px;
 	background: color-mix(in srgb, var(--vscode-editor-background) 75%, white 25%);
 	overflow: auto;
+	margin: 0 auto;
+}
+
+.floating-toolbar {
+	position: fixed;
+	left: 50%;
+	bottom: 1rem;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	padding: 0.7rem 0.8rem;
+	border-radius: 999px;
+	border: 1px solid var(--vscode-panel-border, var(--vscode-editorWidget-border, transparent));
+	background: color-mix(in srgb, var(--vscode-editor-background) 90%, var(--vscode-sideBar-background) 10%);
+	box-shadow: 0 20px 38px rgba(0, 0, 0, 0.22);
+	backdrop-filter: blur(18px);
+	z-index: 20;
+	max-width: calc(100vw - 2rem);
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+.toolbar-divider {
+	width: 1px;
+	height: 1.5rem;
+	background: color-mix(in srgb, var(--vscode-panel-border, transparent) 90%, transparent);
+}
+
+.toolbar-toggle.is-active {
+	border-color: var(--vscode-focusBorder);
+	background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
 }
 
 .status-card {
@@ -437,7 +483,7 @@ button.secondary {
 	}
 
 	.topbar {
-		align-items: flex-start;
+		padding-top: 0;
 	}
 
 	.hero-copy {
@@ -455,7 +501,13 @@ button.secondary {
 		width: 100%;
 	}
 
+	.floating-toolbar {
+		width: calc(100vw - 1rem);
+		bottom: 0.5rem;
+		border-radius: 18px;
+	}
+
 	.score-host {
-		min-height: 60vh;
+		width: 100%;
 	}
 }

@@ -28,6 +28,12 @@ const subtitleElement = document.getElementById('score-subtitle');
 const currentFileElement = document.getElementById('current-file');
 const scoreMetaElement = document.getElementById('score-meta');
 const playerStatusElement = document.getElementById('player-status');
+const workspaceElement = document.querySelector('.workspace');
+const sidebarElement = document.querySelector('.sidebar');
+const trackSettingsCardElement = document.getElementById('track-settings-card');
+const playbackToolsCardElement = document.getElementById('playback-tools-card');
+const trackPanelToggleButton = document.getElementById('track-panel-toggle-button');
+const playbackPanelToggleButton = document.getElementById('playback-panel-toggle-button');
 const playPauseButton = document.getElementById('play-pause-button');
 const stopButton = document.getElementById('stop-button');
 const reloadButton = document.getElementById('reload-button');
@@ -35,6 +41,7 @@ const trackSummaryElement = document.getElementById('track-summary');
 const trackSelectAllButton = document.getElementById('track-select-all-button');
 const trackKeepFirstButton = document.getElementById('track-keep-first-button');
 const trackListElement = document.getElementById('track-list');
+const playbackSummaryElement = document.getElementById('playback-summary');
 const metronomeToggleButton = document.getElementById('metronome-toggle-button');
 const metronomeVolumeInput = document.getElementById('metronome-volume');
 const metronomeVolumeValueElement = document.getElementById('metronome-volume-value');
@@ -46,6 +53,12 @@ const autoScrollToggleButton = document.getElementById('auto-scroll-toggle-butto
 let currentFileName = '';
 let currentScoreTracks = [];
 let trackConfigs = [];
+let expandedTrackIndexes = new Set();
+
+const panelVisibility = {
+	trackSettings: true,
+	playbackTools: true
+};
 
 const playbackSettings = {
 	metronomeEnabled: false,
@@ -95,6 +108,7 @@ const api = new alphaTab.AlphaTabApi(alphaTabElement, {
 setBusy(false);
 setError('');
 setPlayerStatus('Idle');
+updateSidebarVisibility();
 renderPlaybackSettings();
 renderTrackList();
 
@@ -108,6 +122,16 @@ stopButton.addEventListener('click', () => {
 
 reloadButton.addEventListener('click', () => {
 	vscode.postMessage({ command: 'reloadFromDisk' });
+});
+
+trackPanelToggleButton.addEventListener('click', () => {
+	panelVisibility.trackSettings = !panelVisibility.trackSettings;
+	updateSidebarVisibility();
+});
+
+playbackPanelToggleButton.addEventListener('click', () => {
+	panelVisibility.playbackTools = !panelVisibility.playbackTools;
+	updateSidebarVisibility();
 });
 
 trackSelectAllButton.addEventListener('click', () => {
@@ -229,6 +253,7 @@ window.addEventListener('message', event => {
 			currentFileName = message.fileName;
 			currentScoreTracks = [];
 			trackConfigs = [];
+			expandedTrackIndexes = new Set();
 			currentFileElement.textContent = currentFileName;
 			titleElement.textContent = currentFileName;
 			subtitleElement.textContent = message.fileUri;
@@ -257,8 +282,19 @@ function loadScore(base64Data) {
 function renderTrackList() {
 	trackListElement.replaceChildren();
 	const selectedCount = trackConfigs.filter(track => track.isSelected).length;
+	const mutedCount = trackConfigs.filter(track => track.isMuted).length;
+	const soloCount = trackConfigs.filter(track => track.isSolo).length;
+	const summaryParts = trackConfigs.length
+		? [`${selectedCount}/${trackConfigs.length} visible`]
+		: [];
+	if (soloCount > 0) {
+		summaryParts.push(`${soloCount} solo`);
+	}
+	if (mutedCount > 0) {
+		summaryParts.push(`${mutedCount} muted`);
+	}
 	trackSummaryElement.textContent = trackConfigs.length
-		? `${selectedCount}/${trackConfigs.length} tracks visible`
+		? summaryParts.join(' · ')
 		: 'No tracks loaded yet';
 
 	if (trackConfigs.length === 0) {
@@ -274,9 +310,23 @@ function renderTrackList() {
 	}
 }
 
+function updateSidebarVisibility() {
+	trackSettingsCardElement.hidden = !panelVisibility.trackSettings;
+	playbackToolsCardElement.hidden = !panelVisibility.playbackTools;
+	trackPanelToggleButton.classList.toggle('is-active', panelVisibility.trackSettings);
+	playbackPanelToggleButton.classList.toggle('is-active', panelVisibility.playbackTools);
+	trackPanelToggleButton.setAttribute('aria-pressed', String(panelVisibility.trackSettings));
+	playbackPanelToggleButton.setAttribute('aria-pressed', String(panelVisibility.playbackTools));
+
+	const sidebarOpen = panelVisibility.trackSettings || panelVisibility.playbackTools || !busyIndicator.hidden || !errorPanel.hidden;
+	sidebarElement.hidden = !sidebarOpen;
+	workspaceElement.dataset.sidebarOpen = String(sidebarOpen);
+}
+
 function renderTrackCard(config) {
 	const card = document.createElement('article');
 	card.className = 'track-card';
+ 	const isExpanded = expandedTrackIndexes.has(config.index);
 	if (config.isSelected) {
 		card.dataset.selected = 'true';
 	}
@@ -290,13 +340,23 @@ function renderTrackCard(config) {
 	const header = document.createElement('button');
 	header.type = 'button';
 	header.className = 'track-header';
-	header.addEventListener('click', () => {
-		updateTrackSelection(toggleTrackSelection(trackConfigs, config.index));
+	header.addEventListener('click', event => {
+		if (event.altKey || event.metaKey) {
+			updateTrackSelection(toggleTrackSelection(trackConfigs, config.index));
+			return;
+		}
+
+		toggleTrackExpansion(config.index);
 	});
 
 	const visibility = document.createElement('span');
 	visibility.className = 'track-visibility';
 	visibility.textContent = config.isSelected ? '✓' : '○';
+	visibility.title = 'Option-click to toggle track visibility';
+
+	const expander = document.createElement('span');
+	expander.className = 'track-expander';
+	expander.textContent = isExpanded ? '▾' : '▸';
 
 	const identity = document.createElement('div');
 	identity.className = 'track-identity';
@@ -327,6 +387,9 @@ function renderTrackCard(config) {
 	const actions = document.createElement('div');
 	actions.className = 'track-actions';
 	actions.append(
+		createTrackActionButton(config.isSelected, 'Show', () => {
+			updateTrackSelection(toggleTrackSelection(trackConfigs, config.index));
+		}),
 		createTrackActionButton(config.isMuted, 'Mute', () => {
 			toggleMute(config.index);
 		}),
@@ -335,8 +398,12 @@ function renderTrackCard(config) {
 		})
 	);
 
-	header.append(visibility, identity, actions);
+	header.append(visibility, expander, identity, actions);
 	card.appendChild(header);
+
+	if (!isExpanded) {
+		return card;
+	}
 
 	const volumeRow = document.createElement('div');
 	volumeRow.className = 'track-volume-row';
@@ -420,6 +487,17 @@ function createTrackActionButton(active, label, onClick) {
 		onClick();
 	});
 	return button;
+}
+
+function toggleTrackExpansion(trackIndex) {
+	if (expandedTrackIndexes.has(trackIndex)) {
+		expandedTrackIndexes.delete(trackIndex);
+	}
+	else {
+		expandedTrackIndexes.add(trackIndex);
+	}
+
+	renderTrackList();
 }
 
 function createStaffButton(label, active, onClick) {
@@ -508,6 +586,9 @@ function syncTrackPanelFromApi() {
 	}
 
 	trackConfigs = syncTrackConfigs(trackConfigs, currentScoreTracks, api.tracks ?? []);
+	if (expandedTrackIndexes.size === 0) {
+		expandedTrackIndexes = new Set(trackConfigs.filter(track => track.isSelected).map(track => track.index));
+	}
 	renderTrackList();
 }
 
@@ -563,6 +644,11 @@ function renderPlaybackSettings() {
 	metronomeVolumeValueElement.textContent = `${playbackSettings.metronomeVolumePercent}%`;
 	countInVolumeInput.value = String(playbackSettings.countInVolumePercent);
 	countInVolumeValueElement.textContent = `${playbackSettings.countInVolumePercent}%`;
+	playbackSummaryElement.textContent = [
+		`Metronome ${playbackSettings.metronomeEnabled ? `on (${playbackSettings.metronomeVolumePercent}%)` : 'off'}`,
+		`Count-in ${playbackSettings.countInEnabled ? `on (${playbackSettings.countInVolumePercent}%)` : 'off'}`,
+		`Auto scroll ${playbackSettings.autoScrollEnabled ? 'on' : 'off'}`
+	].join(' · ');
 }
 
 function setBusy(busy, message = 'Loading score…') {
@@ -571,12 +657,14 @@ function setBusy(busy, message = 'Loading score…') {
 	playPauseButton.disabled = busy;
 	stopButton.disabled = busy;
 	reloadButton.disabled = busy;
+	updateSidebarVisibility();
 }
 
 function setError(message) {
 	const hasError = Boolean(message);
 	errorPanel.hidden = !hasError;
 	errorMessage.textContent = hasError ? message : '';
+	updateSidebarVisibility();
 }
 
 function setPlayerStatus(message) {

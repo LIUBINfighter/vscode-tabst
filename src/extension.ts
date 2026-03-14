@@ -216,16 +216,11 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 						</div>
 					</div>
 				</div>
-				<div class="toolbar">
-					<button id="reload-button" type="button" class="secondary">Reload</button>
-					<button id="play-pause-button" type="button">Play</button>
-					<button id="stop-button" type="button" class="secondary">Stop</button>
-				</div>
 			</header>
 
 			<section class="workspace">
 				<aside class="sidebar">
-					<div class="sidebar-card">
+					<div id="track-settings-card" class="sidebar-card">
 						<div class="card-header-row">
 							<div>
 								<h2>Track settings</h2>
@@ -239,7 +234,7 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 						<p id="track-summary" class="hint">No tracks loaded yet</p>
 						<div id="track-list" class="track-list"></div>
 					</div>
-					<div class="sidebar-card playback-card">
+					<div id="playback-tools-card" class="sidebar-card playback-card">
 						<h2>Playback tools</h2>
 						<p class="hint">Metronome, count-in and automatic scrolling.</p>
 						<div class="playback-toggle-grid">
@@ -247,6 +242,7 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 							<button id="count-in-toggle-button" type="button" class="playback-chip">Count-in</button>
 							<button id="auto-scroll-toggle-button" type="button" class="playback-chip">Auto scroll</button>
 						</div>
+						<p id="playback-summary" class="hint">Metronome off · Count-in off · Auto scroll on</p>
 						<div class="playback-slider-group">
 							<div class="playback-slider-labels">
 								<span>Metronome volume</span>
@@ -272,10 +268,19 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 					</div>
 				</aside>
 
-				<main class="score-host-wrapper">
-					<div id="alphaTab" class="score-host"></div>
-				</main>
+					<main class="score-host-wrapper">
+						<div id="alphaTab" class="score-host"></div>
+					</main>
 			</section>
+
+			<div class="floating-toolbar" role="toolbar" aria-label="Score controls">
+				<button id="track-panel-toggle-button" type="button" class="secondary compact-button toolbar-toggle is-active">Tracks</button>
+				<button id="playback-panel-toggle-button" type="button" class="secondary compact-button toolbar-toggle is-active">Playback</button>
+				<div class="toolbar-divider" aria-hidden="true"></div>
+				<button id="reload-button" type="button" class="secondary compact-button">Reload</button>
+				<button id="play-pause-button" type="button" class="compact-button">Play</button>
+				<button id="stop-button" type="button" class="secondary compact-button">Stop</button>
+			</div>
 		</div>
 
 		<script nonce="${nonce}">
