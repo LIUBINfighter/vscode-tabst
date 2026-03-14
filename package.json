@@ -2,7 +2,7 @@
   "name": "vscode-tabst",
   "displayName": "vscode-tabst",
   "description": "Open and play Guitar Pro and MusicXML files in VS Code",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LIUBINfighter/vscode-tabst.git"
@@ -85,10 +85,12 @@
     }
   },
   "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "npm run clean && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
+    "package": "npx @vscode/vsce package",
     "lint": "eslint src",
     "test": "vscode-test"
   },
