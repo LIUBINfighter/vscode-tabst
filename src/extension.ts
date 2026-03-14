@@ -196,30 +196,35 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 	</head>
 	<body>
 		<div class="app-shell">
-			<header class="topbar">
-				<div class="hero-copy">
-					<p class="eyebrow">Tabst</p>
-					<h1 id="score-title">Open a score file</h1>
-					<p id="score-subtitle" class="subtitle">Guitar Pro and MusicXML preview with playback</p>
-					<div class="hero-meta-grid">
-						<div class="hero-meta-item">
-							<span class="label">Status</span>
-							<span id="player-status">Idle</span>
-						</div>
-						<div class="hero-meta-item">
-							<span class="label">Current file</span>
-							<span id="current-file">—</span>
-						</div>
-						<div class="hero-meta-item">
-							<span class="label">Artist / Album</span>
-							<span id="score-meta">—</span>
-						</div>
-					</div>
-				</div>
-			</header>
-
 			<section class="workspace">
 				<aside class="sidebar">
+					<div id="meta-info-card" class="sidebar-card sidebar-scroll-card meta-info-card">
+						<p class="eyebrow">Tabst</p>
+						<h2 id="score-title">Open a score file</h2>
+						<p id="score-subtitle" class="subtitle">Guitar Pro and MusicXML preview with playback</p>
+						<div class="sidebar-card-body meta-card-body">
+							<div class="meta-row">
+								<span class="label">Status</span>
+								<span id="player-status">Idle</span>
+							</div>
+							<div class="meta-row">
+								<span class="label">Current file</span>
+								<span id="current-file">—</span>
+							</div>
+							<div class="meta-row">
+								<span class="label">Artist / Album</span>
+								<span id="score-meta">—</span>
+							</div>
+							<section class="info-notice status-notice" id="busy-indicator" hidden>
+								<h3>Working</h3>
+								<p id="busy-message">Loading score…</p>
+							</section>
+							<section class="info-notice error-notice" id="error-panel" hidden>
+								<h3>Could not render this score</h3>
+								<pre id="error-message"></pre>
+							</section>
+						</div>
+					</div>
 					<div id="track-settings-card" class="sidebar-card">
 						<div class="card-header-row">
 							<div>
@@ -231,49 +236,48 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 								<button id="track-keep-first-button" type="button" class="secondary compact-button">First only</button>
 							</div>
 						</div>
-						<p id="track-summary" class="hint">No tracks loaded yet</p>
-						<div id="track-list" class="track-list"></div>
+						<div class="sidebar-card-body track-card-body">
+							<p id="track-summary" class="hint">No tracks loaded yet</p>
+							<div id="track-list" class="track-list"></div>
+						</div>
 					</div>
 					<div id="playback-tools-card" class="sidebar-card playback-card">
 						<h2>Playback tools</h2>
 						<p class="hint">Metronome, count-in and automatic scrolling.</p>
-						<div class="playback-toggle-grid">
-							<button id="metronome-toggle-button" type="button" class="playback-chip">Metronome</button>
-							<button id="count-in-toggle-button" type="button" class="playback-chip">Count-in</button>
-							<button id="auto-scroll-toggle-button" type="button" class="playback-chip">Auto scroll</button>
-						</div>
-						<p id="playback-summary" class="hint">Metronome off · Count-in off · Auto scroll on</p>
-						<div class="playback-slider-group">
-							<div class="playback-slider-labels">
-								<span>Metronome volume</span>
-								<span id="metronome-volume-value">65%</span>
+						<div class="sidebar-card-body playback-card-body">
+							<div class="playback-toggle-grid">
+								<button id="metronome-toggle-button" type="button" class="playback-chip">Metronome</button>
+								<button id="count-in-toggle-button" type="button" class="playback-chip">Count-in</button>
+								<button id="auto-scroll-toggle-button" type="button" class="playback-chip">Auto scroll</button>
 							</div>
-							<input id="metronome-volume" type="range" min="0" max="100" step="1" value="65" />
-						</div>
-						<div class="playback-slider-group">
-							<div class="playback-slider-labels">
-								<span>Count-in volume</span>
-								<span id="count-in-volume-value">55%</span>
+							<p id="playback-summary" class="hint">Metronome off · Count-in off · Auto scroll on</p>
+							<div class="playback-slider-group">
+								<div class="playback-slider-labels">
+									<span>Metronome volume</span>
+									<span id="metronome-volume-value">65%</span>
+								</div>
+								<input id="metronome-volume" type="range" min="0" max="100" step="1" value="65" />
 							</div>
-							<input id="count-in-volume" type="range" min="0" max="100" step="1" value="55" />
+							<div class="playback-slider-group">
+								<div class="playback-slider-labels">
+									<span>Count-in volume</span>
+									<span id="count-in-volume-value">55%</span>
+								</div>
+								<input id="count-in-volume" type="range" min="0" max="100" step="1" value="55" />
+							</div>
 						</div>
-					</div>
-					<div class="sidebar-card status-card" id="busy-indicator" hidden>
-						<h2>Working</h2>
-						<p id="busy-message">Loading score…</p>
-					</div>
-					<div class="sidebar-card error-card" id="error-panel" hidden>
-						<h2>Could not render this score</h2>
-						<pre id="error-message"></pre>
 					</div>
 				</aside>
 
 					<main class="score-host-wrapper">
-						<div id="alphaTab" class="score-host"></div>
+						<div id="score-viewport" class="score-viewport">
+							<div id="alphaTab" class="score-host"></div>
+						</div>
 					</main>
 			</section>
 
 			<div class="floating-toolbar" role="toolbar" aria-label="Score controls">
+				<button id="meta-panel-toggle-button" type="button" class="secondary compact-button toolbar-toggle is-active">Info</button>
 				<button id="track-panel-toggle-button" type="button" class="secondary compact-button toolbar-toggle is-active">Tracks</button>
 				<button id="playback-panel-toggle-button" type="button" class="secondary compact-button toolbar-toggle is-active">Playback</button>
 				<div class="toolbar-divider" aria-hidden="true"></div>
