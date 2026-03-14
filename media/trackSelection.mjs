@@ -24,7 +24,8 @@ function resolveTrackIndex(scoreTracks, renderedTrack) {
 	}
 
 	if (typeof renderedTrack.index === 'number' && Number.isInteger(renderedTrack.index)) {
-		return scoreTracks.at(renderedTrack.index) ? renderedTrack.index : undefined;
+		const matchedIndex = scoreTracks.findIndex(scoreTrack => scoreTrack.index === renderedTrack.index);
+		return matchedIndex >= 0 ? matchedIndex : undefined;
 	}
 
 	return undefined;

@@ -30,4 +30,12 @@ suite('Track selection synchronization', () => {
 
 		assert.deepStrictEqual(deriveInitialSelectedTrackIndexes(scoreTracks, renderedTracks), [0]);
 	});
+
+	test('matches rendered tracks by track.index instead of array position', async () => {
+		const { deriveInitialSelectedTrackIndexes } = await import(trackSelectionModuleUrl);
+		const scoreTracks = [{ index: 10 }, { index: 20 }, { index: 30 }];
+		const renderedTracks = [{ index: 20 }];
+
+		assert.deepStrictEqual(deriveInitialSelectedTrackIndexes(scoreTracks, renderedTracks), [1]);
+	});
 });
