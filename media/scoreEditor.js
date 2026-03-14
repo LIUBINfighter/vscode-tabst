@@ -19,6 +19,8 @@ if (!alphaTab) {
 }
 
 const alphaTabElement = document.getElementById('alphaTab');
+const scoreViewportElement = document.getElementById('score-viewport');
+const scoreScrollElement = scoreViewportElement;
 const busyIndicator = document.getElementById('busy-indicator');
 const busyMessage = document.getElementById('busy-message');
 const errorPanel = document.getElementById('error-panel');
@@ -30,8 +32,10 @@ const scoreMetaElement = document.getElementById('score-meta');
 const playerStatusElement = document.getElementById('player-status');
 const workspaceElement = document.querySelector('.workspace');
 const sidebarElement = document.querySelector('.sidebar');
+const metaInfoCardElement = document.getElementById('meta-info-card');
 const trackSettingsCardElement = document.getElementById('track-settings-card');
 const playbackToolsCardElement = document.getElementById('playback-tools-card');
+const metaPanelToggleButton = document.getElementById('meta-panel-toggle-button');
 const trackPanelToggleButton = document.getElementById('track-panel-toggle-button');
 const playbackPanelToggleButton = document.getElementById('playback-panel-toggle-button');
 const playPauseButton = document.getElementById('play-pause-button');
@@ -56,8 +60,15 @@ let trackConfigs = [];
 let expandedTrackIndexes = new Set();
 
 const panelVisibility = {
+	metaInfo: true,
 	trackSettings: true,
 	playbackTools: true
+};
+
+const panelControls = {
+	metaInfo: { card: metaInfoCardElement, button: metaPanelToggleButton },
+	trackSettings: { card: trackSettingsCardElement, button: trackPanelToggleButton },
+	playbackTools: { card: playbackToolsCardElement, button: playbackPanelToggleButton }
 };
 
 const playbackSettings = {
@@ -68,6 +79,9 @@ const playbackSettings = {
 	autoScrollEnabled: true
 };
 
+let lastAutoScrollTop = null;
+const autoScrollViewportPadding = 24;
+
 const mainGlyphColor = alphaTab.model.Color.fromJson(getComputedStyle(document.body).getPropertyValue('--vscode-foreground').trim());
 const fallbackGlyphColor = mainGlyphColor ?? new alphaTab.model.Color(235, 235, 235, 1);
 const playerSettings = {
@@ -75,7 +89,7 @@ const playerSettings = {
 	enableCursor: true,
 	soundFont: config.soundFontUri,
 	scrollMode: 'Continuous',
-	scrollElement: alphaTabElement
+	scrollElement: scoreViewportElement
 };
 
 const api = new alphaTab.AlphaTabApi(alphaTabElement, {
@@ -105,9 +119,12 @@ const api = new alphaTab.AlphaTabApi(alphaTabElement, {
 	}
 });
 
+api.customScrollHandler = createStableScrollHandler();
+
 setBusy(false);
 setError('');
 setPlayerStatus('Idle');
+initializePanelControls();
 updateSidebarVisibility();
 renderPlaybackSettings();
 renderTrackList();
@@ -122,16 +139,6 @@ stopButton.addEventListener('click', () => {
 
 reloadButton.addEventListener('click', () => {
 	vscode.postMessage({ command: 'reloadFromDisk' });
-});
-
-trackPanelToggleButton.addEventListener('click', () => {
-	panelVisibility.trackSettings = !panelVisibility.trackSettings;
-	updateSidebarVisibility();
-});
-
-playbackPanelToggleButton.addEventListener('click', () => {
-	panelVisibility.playbackTools = !panelVisibility.playbackTools;
-	updateSidebarVisibility();
 });
 
 trackSelectAllButton.addEventListener('click', () => {
@@ -310,15 +317,89 @@ function renderTrackList() {
 	}
 }
 
-function updateSidebarVisibility() {
-	trackSettingsCardElement.hidden = !panelVisibility.trackSettings;
-	playbackToolsCardElement.hidden = !panelVisibility.playbackTools;
-	trackPanelToggleButton.classList.toggle('is-active', panelVisibility.trackSettings);
-	playbackPanelToggleButton.classList.toggle('is-active', panelVisibility.playbackTools);
-	trackPanelToggleButton.setAttribute('aria-pressed', String(panelVisibility.trackSettings));
-	playbackPanelToggleButton.setAttribute('aria-pressed', String(panelVisibility.playbackTools));
+function initializePanelControls() {
+	for (const [panelKey, controls] of Object.entries(panelControls)) {
+		controls.button.addEventListener('click', () => {
+			preserveScoreScrollPosition(() => {
+				panelVisibility[panelKey] = !panelVisibility[panelKey];
+				updateSidebarVisibility();
+			});
+		});
+	}
+}
 
-	const sidebarOpen = panelVisibility.trackSettings || panelVisibility.playbackTools || !busyIndicator.hidden || !errorPanel.hidden;
+function preserveScoreScrollPosition(applyLayoutChange) {
+	stopAlphaTabScrollAnimation();
+	const previousScrollTop = scoreScrollElement.scrollTop;
+	const previousScrollHeight = scoreScrollElement.scrollHeight;
+	const previousClientHeight = scoreScrollElement.clientHeight;
+	const distanceFromBottom = previousScrollHeight - previousClientHeight - previousScrollTop;
+	const wasNearBottom = distanceFromBottom <= 24;
+
+	applyLayoutChange();
+
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => {
+			if (wasNearBottom) {
+				scoreScrollElement.scrollTop = Math.max(0, scoreScrollElement.scrollHeight - scoreScrollElement.clientHeight - distanceFromBottom);
+				return;
+			}
+
+			scoreScrollElement.scrollTop = Math.min(previousScrollTop, Math.max(0, scoreScrollElement.scrollHeight - scoreScrollElement.clientHeight));
+		});
+	});
+}
+
+function createStableScrollHandler() {
+	return {
+		forceScrollTo(currentBeatBounds) {
+			performStableAutoScroll(currentBeatBounds, true, 0);
+		},
+		onBeatCursorUpdating(startBeat, _endBeat, _cursorMode, _actualBeatCursorStartX, _actualBeatCursorEndX, actualBeatCursorTransitionDuration) {
+			performStableAutoScroll(startBeat, false, actualBeatCursorTransitionDuration);
+		}
+	};
+}
+
+function performStableAutoScroll(beatBounds, force, transitionDuration) {
+	if (!beatBounds || !playbackSettings.autoScrollEnabled) {
+		return;
+	}
+
+	const ui = api.uiFacade;
+	const scroll = ui.getScrollContainer();
+	const viewportElement = scroll.element;
+	const scrollOffsetY = api.settings.player.scrollOffsetY ?? 0;
+	const targetTop = beatBounds.barBounds.masterBarBounds.realBounds.y + scrollOffsetY - autoScrollViewportPadding;
+	const maxScrollTop = Math.max(0, viewportElement.scrollHeight - viewportElement.clientHeight);
+	const clampedTargetTop = Math.max(0, Math.min(targetTop, maxScrollTop));
+
+	if (!force && lastAutoScrollTop !== null && Math.abs(clampedTargetTop - lastAutoScrollTop) < 2) {
+		return;
+	}
+
+	lastAutoScrollTop = clampedTargetTop;
+	ui.scrollToY(scroll, clampedTargetTop, force ? 0 : transitionDuration);
+}
+
+function stopAlphaTabScrollAnimation() {
+	try {
+		api.uiFacade.stopScrolling(api.uiFacade.getScrollContainer());
+	}
+	catch {
+	}
+}
+
+function updateSidebarVisibility() {
+	for (const [panelKey, controls] of Object.entries(panelControls)) {
+		const isVisible = panelVisibility[panelKey];
+		controls.card.classList.toggle('is-collapsed', !isVisible);
+		controls.card.hidden = !isVisible;
+		controls.button.classList.toggle('is-active', isVisible);
+		controls.button.setAttribute('aria-pressed', String(isVisible));
+	}
+
+	const sidebarOpen = panelVisibility.metaInfo || panelVisibility.trackSettings || panelVisibility.playbackTools;
 	sidebarElement.hidden = !sidebarOpen;
 	workspaceElement.dataset.sidebarOpen = String(sidebarOpen);
 }
@@ -518,11 +599,13 @@ function updateTrackSelection(nextTrackConfigs) {
 		return;
 	}
 
-	trackConfigs = nextTrackConfigs;
-	applyStaffConfigs(currentScoreTracks, trackConfigs);
-	api.renderTracks(getSelectedTracks(currentScoreTracks, trackConfigs));
-	applyAllTrackVolumes(trackConfigs);
-	renderTrackList();
+	preserveScoreScrollPosition(() => {
+		trackConfigs = nextTrackConfigs;
+		applyStaffConfigs(currentScoreTracks, trackConfigs);
+		api.renderTracks(getSelectedTracks(currentScoreTracks, trackConfigs));
+		applyAllTrackVolumes(trackConfigs);
+		renderTrackList();
+	});
 }
 
 function toggleMute(trackIndex) {
@@ -573,11 +656,13 @@ function handleStaffOptionToggle(trackIndex, staffIndex, option) {
 		return;
 	}
 
-	trackConfigs = nextTrackConfigs;
-	applyStaffConfigs(currentScoreTracks, trackConfigs);
-	api.render();
-	applyAllTrackVolumes(trackConfigs);
-	renderTrackList();
+	preserveScoreScrollPosition(() => {
+		trackConfigs = nextTrackConfigs;
+		applyStaffConfigs(currentScoreTracks, trackConfigs);
+		api.render();
+		applyAllTrackVolumes(trackConfigs);
+		renderTrackList();
+	});
 }
 
 function syncTrackPanelFromApi() {
@@ -623,12 +708,10 @@ function applyPlaybackSettings() {
 	api.countInVolume = playbackSettings.countInEnabled ? playbackSettings.countInVolumePercent / 100 : 0;
 
 	try {
-		api.updateSettings({
-			player: {
-				...playerSettings,
-				scrollMode: playbackSettings.autoScrollEnabled ? 'Continuous' : 'Off'
-			}
-		});
+		lastAutoScrollTop = null;
+		api.settings.player.scrollElement = scoreViewportElement;
+		api.settings.player.scrollMode = playbackSettings.autoScrollEnabled ? alphaTab.ScrollMode.Continuous : alphaTab.ScrollMode.Off;
+		api.updateSettings();
 	}
 	catch (error) {
 		console.error('[Tabst] Failed to update playback settings', error);
@@ -657,6 +740,9 @@ function setBusy(busy, message = 'Loading score…') {
 	playPauseButton.disabled = busy;
 	stopButton.disabled = busy;
 	reloadButton.disabled = busy;
+	if (busy) {
+		panelVisibility.metaInfo = true;
+	}
 	updateSidebarVisibility();
 }
 
@@ -664,6 +750,9 @@ function setError(message) {
 	const hasError = Boolean(message);
 	errorPanel.hidden = !hasError;
 	errorMessage.textContent = hasError ? message : '';
+	if (hasError) {
+		panelVisibility.metaInfo = true;
+	}
 	updateSidebarVisibility();
 }
 
