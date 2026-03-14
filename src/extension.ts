@@ -197,10 +197,24 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 	<body>
 		<div class="app-shell">
 			<header class="topbar">
-				<div>
+				<div class="hero-copy">
 					<p class="eyebrow">Tabst</p>
 					<h1 id="score-title">Open a score file</h1>
 					<p id="score-subtitle" class="subtitle">Guitar Pro and MusicXML preview with playback</p>
+					<div class="hero-meta-grid">
+						<div class="hero-meta-item">
+							<span class="label">Status</span>
+							<span id="player-status">Idle</span>
+						</div>
+						<div class="hero-meta-item">
+							<span class="label">Current file</span>
+							<span id="current-file">—</span>
+						</div>
+						<div class="hero-meta-item">
+							<span class="label">Artist / Album</span>
+							<span id="score-meta">—</span>
+						</div>
+					</div>
 				</div>
 				<div class="toolbar">
 					<button id="reload-button" type="button" class="secondary">Reload</button>
@@ -208,21 +222,6 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 					<button id="stop-button" type="button" class="secondary">Stop</button>
 				</div>
 			</header>
-
-			<section class="meta-card">
-				<div class="meta-row">
-					<span class="label">Status</span>
-					<span id="player-status">Idle</span>
-				</div>
-				<div class="meta-row">
-					<span class="label">Current file</span>
-					<span id="current-file">—</span>
-				</div>
-				<div class="meta-row">
-					<span class="label">Artist / Album</span>
-					<span id="score-meta">—</span>
-				</div>
-			</section>
 
 			<section class="workspace">
 				<aside class="sidebar">

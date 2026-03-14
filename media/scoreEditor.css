@@ -45,13 +45,12 @@ button.secondary {
 .app-shell {
 	min-height: 100vh;
 	display: grid;
-	grid-template-rows: auto auto 1fr;
+	grid-template-rows: auto 1fr;
 	gap: 1rem;
 	padding: 1rem;
 }
 
 .topbar,
-.meta-card,
 .sidebar-card,
 .score-host-wrapper {
 	border: 1px solid var(--vscode-panel-border, var(--vscode-editorWidget-border, transparent));
@@ -67,6 +66,13 @@ button.secondary {
 	padding: 1rem 1.25rem;
 	align-items: center;
 	flex-wrap: wrap;
+}
+
+.hero-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	min-width: min(100%, 34rem);
 }
 
 .eyebrow {
@@ -100,18 +106,22 @@ button.secondary {
 	font-size: 0.82rem;
 }
 
-.meta-card {
+.hero-meta-grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 1rem;
-	padding: 1rem 1.25rem;
+	margin-top: 0.6rem;
 }
 
-.meta-row {
+.hero-meta-item {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
 	min-width: 0;
+	padding: 0.65rem 0.8rem;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--vscode-editor-background) 78%, var(--vscode-sideBar-background) 22%);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, transparent) 72%, transparent);
 }
 
 .label {
@@ -421,9 +431,17 @@ button.secondary {
 }
 
 @media (max-width: 960px) {
-	.meta-card,
+	.hero-meta-grid,
 	.workspace {
 		grid-template-columns: 1fr;
+	}
+
+	.topbar {
+		align-items: flex-start;
+	}
+
+	.hero-copy {
+		min-width: 100%;
 	}
 
 	.card-header-row,
