@@ -227,9 +227,41 @@ class ScoreViewerProvider implements vscode.CustomReadonlyEditorProvider<ScoreDo
 			<section class="workspace">
 				<aside class="sidebar">
 					<div class="sidebar-card">
-						<h2>Tracks</h2>
-						<p class="hint">Choose the tracks you want to render.</p>
+						<div class="card-header-row">
+							<div>
+								<h2>Track settings</h2>
+								<p class="hint">Visibility, staff combinations, volume, solo and mute.</p>
+							</div>
+							<div class="track-actions-inline">
+								<button id="track-select-all-button" type="button" class="secondary compact-button">All</button>
+								<button id="track-keep-first-button" type="button" class="secondary compact-button">First only</button>
+							</div>
+						</div>
+						<p id="track-summary" class="hint">No tracks loaded yet</p>
 						<div id="track-list" class="track-list"></div>
+					</div>
+					<div class="sidebar-card playback-card">
+						<h2>Playback tools</h2>
+						<p class="hint">Metronome, count-in and automatic scrolling.</p>
+						<div class="playback-toggle-grid">
+							<button id="metronome-toggle-button" type="button" class="playback-chip">Metronome</button>
+							<button id="count-in-toggle-button" type="button" class="playback-chip">Count-in</button>
+							<button id="auto-scroll-toggle-button" type="button" class="playback-chip">Auto scroll</button>
+						</div>
+						<div class="playback-slider-group">
+							<div class="playback-slider-labels">
+								<span>Metronome volume</span>
+								<span id="metronome-volume-value">65%</span>
+							</div>
+							<input id="metronome-volume" type="range" min="0" max="100" step="1" value="65" />
+						</div>
+						<div class="playback-slider-group">
+							<div class="playback-slider-labels">
+								<span>Count-in volume</span>
+								<span id="count-in-volume-value">55%</span>
+							</div>
+							<input id="count-in-volume" type="range" min="0" max="100" step="1" value="55" />
+						</div>
 					</div>
 					<div class="sidebar-card status-card" id="busy-indicator" hidden>
 						<h2>Working</h2>

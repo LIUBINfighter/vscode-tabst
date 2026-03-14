@@ -95,6 +95,11 @@ button.secondary {
 	flex-wrap: wrap;
 }
 
+.compact-button {
+	padding: 0.4rem 0.7rem;
+	font-size: 0.82rem;
+}
+
 .meta-card {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -118,7 +123,7 @@ button.secondary {
 
 .workspace {
 	display: grid;
-	grid-template-columns: minmax(220px, 280px) 1fr;
+	grid-template-columns: minmax(320px, 380px) 1fr;
 	gap: 1rem;
 	min-height: 0;
 }
@@ -134,31 +139,95 @@ button.secondary {
 	overflow: hidden;
 }
 
+.card-header-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 0.75rem;
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.track-actions-inline {
+	display: flex;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
 .track-list {
 	display: flex;
 	flex-direction: column;
-	gap: 0.6rem;
+	gap: 0.8rem;
 	margin-top: 0.9rem;
-	max-height: 50vh;
+	max-height: 48vh;
 	overflow: auto;
 }
 
-.track-item {
+.track-card {
 	display: flex;
-	align-items: flex-start;
-	gap: 0.65rem;
-	padding: 0.65rem 0.75rem;
-	border-radius: 10px;
-	background: color-mix(in srgb, var(--vscode-sideBar-background) 72%, transparent);
-	border: 1px solid transparent;
+	flex-direction: column;
+	gap: 0.75rem;
+	padding: 0.8rem;
+	border-radius: 14px;
+	background: color-mix(in srgb, var(--vscode-sideBar-background) 80%, transparent);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, transparent) 70%, transparent);
+	transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
 }
 
-.track-item:hover {
+.track-card[data-selected='true'] {
 	border-color: var(--vscode-focusBorder);
+	background: color-mix(in srgb, var(--vscode-focusBorder) 10%, var(--vscode-sideBar-background) 90%);
 }
 
-.track-item input {
-	margin-top: 0.2rem;
+.track-card[data-muted='true'] {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vscode-errorForeground) 35%, transparent);
+}
+
+.track-card[data-solo='true'] {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vscode-terminal-ansiYellow) 45%, transparent);
+}
+
+.track-header {
+	all: unset;
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
+	cursor: pointer;
+}
+
+.track-card:hover {
+	transform: translateY(-1px);
+}
+
+.track-visibility {
+	width: 1.55rem;
+	height: 1.55rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
+	font-weight: 700;
+	color: var(--vscode-focusBorder);
+	background: color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent);
+}
+
+.track-identity {
+	flex: 1;
+	min-width: 0;
+}
+
+.track-title-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 0.75rem;
+	align-items: center;
+}
+
+.track-badges,
+.track-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
 }
 
 .track-name {
@@ -167,9 +236,137 @@ button.secondary {
 }
 
 .track-kind {
-	margin: 0.15rem 0 0;
-	font-size: 0.9rem;
+	margin: 0.18rem 0 0;
+	font-size: 0.82rem;
 	color: var(--vscode-descriptionForeground);
+}
+
+.track-badge {
+	min-width: 1.35rem;
+	height: 1.35rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 700;
+	border: 1px solid transparent;
+}
+
+.track-badge[data-tone='muted'] {
+	background: color-mix(in srgb, var(--vscode-errorForeground) 18%, transparent);
+	border-color: color-mix(in srgb, var(--vscode-errorForeground) 35%, transparent);
+	color: var(--vscode-errorForeground);
+}
+
+.track-badge[data-tone='solo'] {
+	background: color-mix(in srgb, var(--vscode-terminal-ansiYellow) 24%, transparent);
+	border-color: color-mix(in srgb, var(--vscode-terminal-ansiYellow) 40%, transparent);
+	color: color-mix(in srgb, var(--vscode-terminal-ansiYellow) 80%, white 20%);
+}
+
+.track-action-button,
+.staff-option-button,
+.playback-chip {
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, transparent) 80%, transparent);
+	border-radius: 999px;
+	padding: 0.35rem 0.7rem;
+	background: color-mix(in srgb, var(--vscode-editor-background) 82%, var(--vscode-sideBar-background) 18%);
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.track-action-button[data-active='true'],
+.staff-option-button[data-active='true'],
+.playback-chip[data-active='true'] {
+	background: color-mix(in srgb, var(--vscode-focusBorder) 22%, transparent);
+	border-color: var(--vscode-focusBorder);
+	color: var(--vscode-foreground);
+}
+
+.track-header:focus-visible,
+.track-action-button:focus-visible,
+.staff-option-button:focus-visible,
+.playback-chip:focus-visible,
+.compact-button:focus-visible,
+.track-volume-slider:focus-visible,
+.playback-slider-group input[type='range']:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.track-volume-row,
+.playback-slider-labels {
+	display: flex;
+	justify-content: space-between;
+	gap: 0.75rem;
+	align-items: center;
+	font-size: 0.78rem;
+	color: var(--vscode-descriptionForeground);
+}
+
+.track-volume-label {
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	font-size: 0.72rem;
+}
+
+.track-volume-value {
+	font-variant-numeric: tabular-nums;
+	color: var(--vscode-foreground);
+}
+
+.track-volume-slider,
+.playback-slider-group input[type='range'] {
+	width: 100%;
+	accent-color: var(--vscode-focusBorder);
+	cursor: pointer;
+}
+
+.track-staves {
+	display: flex;
+	flex-direction: column;
+	gap: 0.55rem;
+	padding-top: 0.15rem;
+}
+
+.staff-row {
+	display: grid;
+	grid-template-columns: 4.25rem 1fr;
+	gap: 0.55rem;
+	align-items: center;
+}
+
+.staff-label {
+	font-size: 0.76rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--vscode-descriptionForeground);
+}
+
+.staff-options,
+.playback-toggle-grid {
+	display: flex;
+	gap: 0.45rem;
+	flex-wrap: wrap;
+}
+
+.playback-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+}
+
+.playback-slider-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	padding: 0.7rem 0.75rem;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--vscode-sideBar-background) 72%, transparent);
 }
 
 .score-host-wrapper {
@@ -227,6 +424,17 @@ button.secondary {
 	.meta-card,
 	.workspace {
 		grid-template-columns: 1fr;
+	}
+
+	.card-header-row,
+	.track-title-row {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.track-actions-inline,
+	.playback-toggle-grid {
+		width: 100%;
 	}
 
 	.score-host {

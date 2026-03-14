@@ -1,4 +1,14 @@
-import { deriveInitialSelectedTrackIndexes } from './trackSelection.mjs';
+import {
+	applyStaffConfigs,
+	getSelectedTracks,
+	setAllTrackSelection,
+	setTrackVolume,
+	syncTrackConfigs,
+	toggleStaffOption,
+	toggleTrackMute,
+	toggleTrackSelection,
+	toggleTrackSolo
+} from './trackSettings.mjs';
 
 const vscode = globalThis.acquireVsCodeApi();
 const alphaTab = globalThis.alphaTab;
@@ -21,14 +31,39 @@ const playerStatusElement = document.getElementById('player-status');
 const playPauseButton = document.getElementById('play-pause-button');
 const stopButton = document.getElementById('stop-button');
 const reloadButton = document.getElementById('reload-button');
+const trackSummaryElement = document.getElementById('track-summary');
+const trackSelectAllButton = document.getElementById('track-select-all-button');
+const trackKeepFirstButton = document.getElementById('track-keep-first-button');
 const trackListElement = document.getElementById('track-list');
+const metronomeToggleButton = document.getElementById('metronome-toggle-button');
+const metronomeVolumeInput = document.getElementById('metronome-volume');
+const metronomeVolumeValueElement = document.getElementById('metronome-volume-value');
+const countInToggleButton = document.getElementById('count-in-toggle-button');
+const countInVolumeInput = document.getElementById('count-in-volume');
+const countInVolumeValueElement = document.getElementById('count-in-volume-value');
+const autoScrollToggleButton = document.getElementById('auto-scroll-toggle-button');
 
-let selectedTrackIndexes = [];
 let currentFileName = '';
 let currentScoreTracks = [];
+let trackConfigs = [];
+
+const playbackSettings = {
+	metronomeEnabled: false,
+	metronomeVolumePercent: 65,
+	countInEnabled: false,
+	countInVolumePercent: 55,
+	autoScrollEnabled: true
+};
 
 const mainGlyphColor = alphaTab.model.Color.fromJson(getComputedStyle(document.body).getPropertyValue('--vscode-foreground').trim());
 const fallbackGlyphColor = mainGlyphColor ?? new alphaTab.model.Color(235, 235, 235, 1);
+const playerSettings = {
+	playerMode: 'EnabledAutomatic',
+	enableCursor: true,
+	soundFont: config.soundFontUri,
+	scrollMode: 'Continuous',
+	scrollElement: alphaTabElement
+};
 
 const api = new alphaTab.AlphaTabApi(alphaTabElement, {
 	core: {
@@ -38,13 +73,7 @@ const api = new alphaTab.AlphaTabApi(alphaTabElement, {
 			[alphaTab.FontFileFormat.Woff, config.bravuraWoffUri]
 		])
 	},
-	player: {
-		playerMode: 'EnabledAutomatic',
-		enableCursor: true,
-		soundFont: config.soundFontUri,
-		scrollMode: 'Continuous',
-		scrollElement: alphaTabElement
-	},
+	player: playerSettings,
 	display: {
 		scale: 0.9,
 		resources: {
@@ -66,6 +95,8 @@ const api = new alphaTab.AlphaTabApi(alphaTabElement, {
 setBusy(false);
 setError('');
 setPlayerStatus('Idle');
+renderPlaybackSettings();
+renderTrackList();
 
 playPauseButton.addEventListener('click', () => {
 	api.playPause();
@@ -79,6 +110,60 @@ reloadButton.addEventListener('click', () => {
 	vscode.postMessage({ command: 'reloadFromDisk' });
 });
 
+trackSelectAllButton.addEventListener('click', () => {
+	updateTrackSelection(setAllTrackSelection(trackConfigs, true));
+});
+
+trackKeepFirstButton.addEventListener('click', () => {
+	updateTrackSelection(setAllTrackSelection(trackConfigs, false));
+});
+
+metronomeToggleButton.addEventListener('click', () => {
+	playbackSettings.metronomeEnabled = !playbackSettings.metronomeEnabled;
+	applyPlaybackSettings();
+	renderPlaybackSettings();
+});
+
+metronomeVolumeInput.addEventListener('input', event => {
+	const value = Number.parseInt(event.currentTarget.value, 10);
+	if (Number.isNaN(value)) {
+		return;
+	}
+
+	playbackSettings.metronomeVolumePercent = value;
+	if (value > 0) {
+		playbackSettings.metronomeEnabled = true;
+	}
+	applyPlaybackSettings();
+	renderPlaybackSettings();
+});
+
+countInToggleButton.addEventListener('click', () => {
+	playbackSettings.countInEnabled = !playbackSettings.countInEnabled;
+	applyPlaybackSettings();
+	renderPlaybackSettings();
+});
+
+countInVolumeInput.addEventListener('input', event => {
+	const value = Number.parseInt(event.currentTarget.value, 10);
+	if (Number.isNaN(value)) {
+		return;
+	}
+
+	playbackSettings.countInVolumePercent = value;
+	if (value > 0) {
+		playbackSettings.countInEnabled = true;
+	}
+	applyPlaybackSettings();
+	renderPlaybackSettings();
+});
+
+autoScrollToggleButton.addEventListener('click', () => {
+	playbackSettings.autoScrollEnabled = !playbackSettings.autoScrollEnabled;
+	applyPlaybackSettings();
+	renderPlaybackSettings();
+});
+
 window.addEventListener('pagehide', () => {
 	api.stop();
 	api.destroy();
@@ -86,7 +171,7 @@ window.addEventListener('pagehide', () => {
 
 api.scoreLoaded.on(score => {
 	currentScoreTracks = score.tracks;
-	selectedTrackIndexes = deriveInitialSelectedTrackIndexes(score.tracks, api.tracks ?? []);
+	trackConfigs = syncTrackConfigs(trackConfigs, score.tracks, api.tracks ?? []);
 	currentFileElement.textContent = currentFileName || 'Current score';
 	titleElement.textContent = score.title?.trim() || currentFileName || 'Untitled score';
 	const artist = score.artist?.trim();
@@ -94,12 +179,14 @@ api.scoreLoaded.on(score => {
 	const metaParts = [artist, album].filter(Boolean);
 	scoreMetaElement.textContent = metaParts.length > 0 ? metaParts.join(' • ') : 'No artist or album metadata';
 	subtitleElement.textContent = score.subTitle?.trim() || score.music?.trim() || 'Rendered by alphaTab inside VS Code';
-	renderTrackList(score.tracks);
+	applyPlaybackSettings();
+	applyAllTrackVolumes(trackConfigs);
+	renderTrackList();
 	setError('');
 });
 
 api.renderFinished.on(() => {
-	syncTrackSelectionUi();
+	syncTrackPanelFromApi();
 	setBusy(false);
 	setPlayerStatus('Rendered');
 });
@@ -140,12 +227,14 @@ window.addEventListener('message', event => {
 		case 'loadScore': {
 			api.stop();
 			currentFileName = message.fileName;
+			currentScoreTracks = [];
+			trackConfigs = [];
 			currentFileElement.textContent = currentFileName;
 			titleElement.textContent = currentFileName;
 			subtitleElement.textContent = message.fileUri;
 			setError('');
 			setBusy(true, 'Parsing score and preparing playback…');
-			trackListElement.replaceChildren();
+			renderTrackList();
 			playPauseButton.textContent = 'Play';
 			loadScore(message.fileData);
 			break;
@@ -165,71 +254,315 @@ function loadScore(base64Data) {
 	api.load(bytes);
 }
 
-function renderTrackList(tracks) {
+function renderTrackList() {
 	trackListElement.replaceChildren();
+	const selectedCount = trackConfigs.filter(track => track.isSelected).length;
+	trackSummaryElement.textContent = trackConfigs.length
+		? `${selectedCount}/${trackConfigs.length} tracks visible`
+		: 'No tracks loaded yet';
 
-	if (!tracks || tracks.length === 0) {
+	if (trackConfigs.length === 0) {
 		const empty = document.createElement('p');
 		empty.className = 'hint';
-		empty.textContent = 'This score does not expose track data.';
+		empty.textContent = 'This score does not expose track settings yet.';
 		trackListElement.appendChild(empty);
 		return;
 	}
 
-	for (const [index, track] of tracks.entries()) {
-		const label = document.createElement('label');
-		label.className = 'track-item';
-
-		const checkbox = document.createElement('input');
-		checkbox.type = 'checkbox';
-		checkbox.checked = selectedTrackIndexes.includes(index);
-		checkbox.addEventListener('change', () => {
-			selectedTrackIndexes = tracks
-				.map((_, trackIndex) => trackIndex)
-				.filter(trackIndex => {
-					const input = trackListElement.querySelector(`input[data-track-index="${trackIndex}"]`);
-					return input instanceof HTMLInputElement ? input.checked : false;
-				});
-
-			if (selectedTrackIndexes.length === 0) {
-				checkbox.checked = true;
-				selectedTrackIndexes = [index];
-			}
-
-			const selectedTracks = selectedTrackIndexes.map(trackIndex => tracks[trackIndex]);
-			api.renderTracks(selectedTracks);
-		});
-		checkbox.dataset.trackIndex = String(index);
-
-		const content = document.createElement('div');
-
-		const trackName = document.createElement('p');
-		trackName.className = 'track-name';
-		trackName.textContent = track.name || `Track ${index + 1}`;
-
-		const trackKind = document.createElement('p');
-		trackKind.className = 'track-kind';
-		trackKind.textContent = track.playbackInfo?.programName || track.staves?.map(stave => stave.name).filter(Boolean).join(' · ') || 'Instrument track';
-
-		content.append(trackName, trackKind);
-		label.append(checkbox, content);
-		trackListElement.appendChild(label);
+	for (const config of trackConfigs) {
+		trackListElement.appendChild(renderTrackCard(config));
 	}
 }
 
-function syncTrackSelectionUi() {
-	if (!currentScoreTracks || currentScoreTracks.length === 0) {
+function renderTrackCard(config) {
+	const card = document.createElement('article');
+	card.className = 'track-card';
+	if (config.isSelected) {
+		card.dataset.selected = 'true';
+	}
+	if (config.isMuted) {
+		card.dataset.muted = 'true';
+	}
+	if (config.isSolo) {
+		card.dataset.solo = 'true';
+	}
+
+	const header = document.createElement('button');
+	header.type = 'button';
+	header.className = 'track-header';
+	header.addEventListener('click', () => {
+		updateTrackSelection(toggleTrackSelection(trackConfigs, config.index));
+	});
+
+	const visibility = document.createElement('span');
+	visibility.className = 'track-visibility';
+	visibility.textContent = config.isSelected ? '✓' : '○';
+
+	const identity = document.createElement('div');
+	identity.className = 'track-identity';
+
+	const titleRow = document.createElement('div');
+	titleRow.className = 'track-title-row';
+
+	const title = document.createElement('p');
+	title.className = 'track-name';
+	title.textContent = config.name;
+
+	const badges = document.createElement('div');
+	badges.className = 'track-badges';
+	if (config.isMuted) {
+		badges.appendChild(createBadge('M', 'muted'));
+	}
+	if (config.isSolo) {
+		badges.appendChild(createBadge('S', 'solo'));
+	}
+
+	const kind = document.createElement('p');
+	kind.className = 'track-kind';
+	kind.textContent = config.kind;
+
+	titleRow.append(title, badges);
+	identity.append(titleRow, kind);
+
+	const actions = document.createElement('div');
+	actions.className = 'track-actions';
+	actions.append(
+		createTrackActionButton(config.isMuted, 'Mute', () => {
+			toggleMute(config.index);
+		}),
+		createTrackActionButton(config.isSolo, 'Solo', () => {
+			toggleSolo(config.index);
+		})
+	);
+
+	header.append(visibility, identity, actions);
+	card.appendChild(header);
+
+	const volumeRow = document.createElement('div');
+	volumeRow.className = 'track-volume-row';
+	volumeRow.innerHTML = `<span class="track-volume-label">Volume</span><span class="track-volume-value">${config.volumePercent}%</span>`;
+	const volumeSlider = document.createElement('input');
+	volumeSlider.type = 'range';
+	volumeSlider.min = '0';
+	volumeSlider.max = '200';
+	volumeSlider.step = '1';
+	volumeSlider.value = String(config.volumePercent);
+	volumeSlider.className = 'track-volume-slider';
+	volumeSlider.addEventListener('input', event => {
+		event.stopPropagation();
+		const value = Number.parseInt(event.currentTarget.value, 10);
+		if (Number.isNaN(value)) {
+			return;
+		}
+
+		trackConfigs = setTrackVolume(trackConfigs, config.index, value);
+		applyTrackVolume(config.index, value);
+		renderTrackList();
+	});
+	card.appendChild(volumeRow);
+	card.appendChild(volumeSlider);
+
+	if (config.staves.length > 0) {
+		const staves = document.createElement('div');
+		staves.className = 'track-staves';
+
+		for (const [staffPosition, staff] of config.staves.entries()) {
+			const row = document.createElement('div');
+			row.className = 'staff-row';
+
+			const label = document.createElement('span');
+			label.className = 'staff-label';
+			label.textContent = `Staff ${staffPosition + 1}`;
+
+			const options = document.createElement('div');
+			options.className = 'staff-options';
+			options.append(
+				createStaffButton('Std', staff.showStandardNotation, () => {
+					handleStaffOptionToggle(config.index, staff.staffIndex, 'showStandardNotation');
+				}),
+				createStaffButton('Tab', staff.showTablature, () => {
+					handleStaffOptionToggle(config.index, staff.staffIndex, 'showTablature');
+				}),
+				createStaffButton('Slash', staff.showSlash, () => {
+					handleStaffOptionToggle(config.index, staff.staffIndex, 'showSlash');
+				}),
+				createStaffButton('Num', staff.showNumbered, () => {
+					handleStaffOptionToggle(config.index, staff.staffIndex, 'showNumbered');
+				})
+			);
+
+			row.append(label, options);
+			staves.appendChild(row);
+		}
+
+		card.appendChild(staves);
+	}
+
+	return card;
+}
+
+function createBadge(label, tone) {
+	const badge = document.createElement('span');
+	badge.className = 'track-badge';
+	badge.dataset.tone = tone;
+	badge.textContent = label;
+	return badge;
+}
+
+function createTrackActionButton(active, label, onClick) {
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.className = 'track-action-button';
+	button.dataset.active = String(active);
+	button.textContent = label;
+	button.addEventListener('click', event => {
+		event.stopPropagation();
+		onClick();
+	});
+	return button;
+}
+
+function createStaffButton(label, active, onClick) {
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.className = 'staff-option-button';
+	button.dataset.active = String(active);
+	button.textContent = label;
+	button.addEventListener('click', event => {
+		event.stopPropagation();
+		onClick();
+	});
+	return button;
+}
+
+function updateTrackSelection(nextTrackConfigs) {
+	if (nextTrackConfigs === trackConfigs || currentScoreTracks.length === 0) {
 		return;
 	}
 
-	selectedTrackIndexes = deriveInitialSelectedTrackIndexes(currentScoreTracks, api.tracks ?? []);
+	trackConfigs = nextTrackConfigs;
+	applyStaffConfigs(currentScoreTracks, trackConfigs);
+	api.renderTracks(getSelectedTracks(currentScoreTracks, trackConfigs));
+	applyAllTrackVolumes(trackConfigs);
+	renderTrackList();
+}
 
-	for (const [trackIndex] of currentScoreTracks.entries()) {
-		const input = trackListElement.querySelector(`input[data-track-index="${trackIndex}"]`);
-		if (input instanceof HTMLInputElement) {
-			input.checked = selectedTrackIndexes.includes(trackIndex);
-		}
+function toggleMute(trackIndex) {
+	const track = currentScoreTracks.find(candidate => candidate.index === trackIndex);
+	if (!track) {
+		return;
 	}
+
+	const config = trackConfigs.find(candidate => candidate.index === trackIndex);
+	if (!config) {
+		return;
+	}
+
+	const nextMuted = !config.isMuted;
+	if (nextMuted && config.isSolo) {
+		api.changeTrackSolo([track], false);
+	}
+
+	api.changeTrackMute([track], nextMuted);
+	trackConfigs = toggleTrackMute(trackConfigs, trackIndex);
+	renderTrackList();
+}
+
+function toggleSolo(trackIndex) {
+	const track = currentScoreTracks.find(candidate => candidate.index === trackIndex);
+	if (!track) {
+		return;
+	}
+
+	const config = trackConfigs.find(candidate => candidate.index === trackIndex);
+	if (!config) {
+		return;
+	}
+
+	const nextSolo = !config.isSolo;
+	if (nextSolo && config.isMuted) {
+		api.changeTrackMute([track], false);
+	}
+
+	api.changeTrackSolo([track], nextSolo);
+	trackConfigs = toggleTrackSolo(trackConfigs, trackIndex);
+	renderTrackList();
+}
+
+function handleStaffOptionToggle(trackIndex, staffIndex, option) {
+	const nextTrackConfigs = toggleStaffOption(trackConfigs, trackIndex, staffIndex, option);
+	if (nextTrackConfigs === trackConfigs || currentScoreTracks.length === 0) {
+		return;
+	}
+
+	trackConfigs = nextTrackConfigs;
+	applyStaffConfigs(currentScoreTracks, trackConfigs);
+	api.render();
+	applyAllTrackVolumes(trackConfigs);
+	renderTrackList();
+}
+
+function syncTrackPanelFromApi() {
+	if (currentScoreTracks.length === 0) {
+		return;
+	}
+
+	trackConfigs = syncTrackConfigs(trackConfigs, currentScoreTracks, api.tracks ?? []);
+	renderTrackList();
+}
+
+function applyTrackVolume(trackIndex, volumePercent) {
+	const track = currentScoreTracks.find(candidate => candidate.index === trackIndex);
+	if (!track) {
+		return;
+	}
+
+	api.changeTrackVolume([track], volumePercent / 100);
+	const nextMuted = trackConfigs.every(config => config.isMuted);
+	if (nextMuted) {
+		setPlayerStatus('Metronome only');
+	}
+	else if (api.playerState === alphaTab.synth.PlayerState.Playing) {
+		setPlayerStatus('Playing');
+	}
+	else {
+		setPlayerStatus('Rendered');
+	}
+	return track;
+}
+
+function applyAllTrackVolumes(configs) {
+	for (const config of configs) {
+		applyTrackVolume(config.index, config.volumePercent);
+	}
+}
+
+function applyPlaybackSettings() {
+	api.metronomeVolume = playbackSettings.metronomeEnabled ? playbackSettings.metronomeVolumePercent / 100 : 0;
+	api.countInVolume = playbackSettings.countInEnabled ? playbackSettings.countInVolumePercent / 100 : 0;
+
+	try {
+		api.updateSettings({
+			player: {
+				...playerSettings,
+				scrollMode: playbackSettings.autoScrollEnabled ? 'Continuous' : 'Off'
+			}
+		});
+	}
+	catch (error) {
+		console.error('[Tabst] Failed to update playback settings', error);
+		setError(`Could not apply playback settings: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+
+function renderPlaybackSettings() {
+	metronomeToggleButton.dataset.active = String(playbackSettings.metronomeEnabled);
+	countInToggleButton.dataset.active = String(playbackSettings.countInEnabled);
+	autoScrollToggleButton.dataset.active = String(playbackSettings.autoScrollEnabled);
+	metronomeVolumeInput.value = String(playbackSettings.metronomeVolumePercent);
+	metronomeVolumeValueElement.textContent = `${playbackSettings.metronomeVolumePercent}%`;
+	countInVolumeInput.value = String(playbackSettings.countInVolumePercent);
+	countInVolumeValueElement.textContent = `${playbackSettings.countInVolumePercent}%`;
 }
 
 function setBusy(busy, message = 'Loading score…') {
